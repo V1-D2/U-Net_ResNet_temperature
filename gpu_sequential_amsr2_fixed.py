@@ -237,18 +237,13 @@ class SingleFileAMSR2Dataset(Dataset):
             blur = transforms.GaussianBlur(kernel_size=3, sigma=0.5)
             low_res = blur(low_res)
 
-        # Upsample back to original size
-        degraded = F.interpolate(
-            low_res,
-            size=(h, w),
-            mode='bilinear',
-            align_corners=False
-        )
+        # НЕ ДЕЛАЕМ UPSAMPLE ОБРАТНО!
+        # Модель сама увеличит в 8 раз
 
-        result = degraded.squeeze().cpu().numpy()
+        result = low_res.squeeze().cpu().numpy()
 
         # Clean up GPU memory
-        del high_res_tensor, low_res, degraded
+        del high_res_tensor, low_res
         if device.type == 'cuda':
             torch.cuda.empty_cache()
 
