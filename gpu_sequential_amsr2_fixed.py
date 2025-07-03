@@ -271,7 +271,7 @@ class SingleFileAMSR2Dataset(Dataset):
 class AMSR2NPZDataPreprocessor:
     """Preprocessor for AMSR2 data"""
 
-    def __init__(self, target_height: int = 2048, target_width: int = 256):  # Changed to 200
+    def __init__(self, target_height: int = 2048, target_width: int = 224):  # Changed to 200
         self.target_height = target_height
         self.target_width = target_width
         logger.info(f"📏 Preprocessor configured for size: {target_height}x{target_width}")
