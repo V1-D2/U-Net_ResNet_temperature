@@ -207,9 +207,8 @@ class SingleFileAMSR2Dataset(Dataset):
                 scale_factor = metadata.get('scale_factor', 1.0)
                 temperature = raw_temperature.astype(np.float32) * scale_factor
 
-                # Fix negative strides if any
-                if any(s < 0 for s in temperature.strides):
-                    temperature = temperature.copy()
+                # ВАЖНО: делаем копию сразу после загрузки
+                temperature = temperature.copy()
 
                 # Clear raw data
                 del raw_temperature
@@ -222,8 +221,13 @@ class SingleFileAMSR2Dataset(Dataset):
                 temperature = self.preprocessor.crop_and_pad_to_target(temperature)
                 temperature = self.preprocessor.normalize_brightness_temperature(temperature)
 
+                # ВАЖНО: делаем копию после всех операций
+                temperature = np.ascontiguousarray(temperature)
+
                 if self.augment:
                     temperature = self._augment_data(temperature)
+                    # И после аугментации тоже
+                    temperature = np.ascontiguousarray(temperature)
 
                 # Create degraded version
                 degraded = self._create_degradation(temperature)
@@ -237,7 +241,7 @@ class SingleFileAMSR2Dataset(Dataset):
 
         except Exception as e:
             logger.error(f"❌ Unexpected error loading swath {swath_idx}: {e}")
-            raise  # Пусть падает - мы уже проверили все swaths при сканировании
+            raise
 
     def _create_degradation(self, high_res: np.ndarray) -> np.ndarray:
         """Create degraded version for 8x super-resolution training"""
