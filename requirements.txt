@@ -1,0 +1,14 @@
+# Core dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.21.0,<1.24.0  # Avoid compatibility issues
+matplotlib>=3.5.0
+scikit-learn>=1.0.0
+tqdm>=4.60.0
+Pillow>=8.0.0
+psutil>=5.8.0
+
+# Optional but recommended
+h5py>=3.0.0  # For better file handling
+pandas>=1.3.0  # For data analysis
+tensorboard>=2.10.0  # For training visualization
