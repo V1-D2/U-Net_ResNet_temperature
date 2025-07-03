@@ -608,7 +608,7 @@ class MemorySafeSequentialTrainer:
         self.best_loss = float('inf')
 
     def train_on_file(self, file_path: str, preprocessor,
-                      epochs_per_file: int = 10,  # Train 10 epochs per file
+                      epochs_per_file: int = 1,  # Train 10 epochs per file
                       batch_size: int = 4,
                       augment: bool = True,
                       filter_orbit_type: Optional[str] = None):
@@ -632,7 +632,7 @@ class MemorySafeSequentialTrainer:
                 degradation_scale=8,  # 8x super-resolution
                 augment=augment,
                 filter_orbit_type=filter_orbit_type,
-                max_swaths_in_memory=1000  # Limit swaths
+                max_swaths_in_memory=100  # Limit swaths
             )
 
             if len(dataset) == 0:
@@ -644,7 +644,7 @@ class MemorySafeSequentialTrainer:
                 dataset,
                 batch_size=batch_size,
                 shuffle=True,
-                num_workers=0,
+                num_workers=4,
                 pin_memory=True if self.device.type == 'cuda' else False,
                 persistent_workers=False,  # Don't keep workers alive
                 drop_last=True

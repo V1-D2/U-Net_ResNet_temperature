@@ -71,8 +71,8 @@ apptainer exec --nv \
     python gpu_sequential_amsr2_fixed.py \
     --npz-dir /home/vdidur/temperature_sr_project/data \
     --max-files 4 \
-    --epochs-per-file 2 \
-    --batch-size 2 \
+    --epochs-per-file 1 \
+    --batch-size 8 \
     --gradient-accumulation 4 \
     --lr 1e-4 \
     --use-amp \
