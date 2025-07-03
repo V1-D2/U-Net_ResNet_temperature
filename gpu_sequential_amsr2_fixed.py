@@ -107,6 +107,7 @@ class SingleFileAMSR2Dataset(Dataset):
         """Scan file to get valid swath indices without loading data"""
         logger.info(f"📂 Scanning file: {os.path.basename(self.npz_path)}")
         valid_indices = []
+        rejected_count = 0
 
         try:
             with np.load(self.npz_path, allow_pickle=True) as data:
@@ -117,24 +118,61 @@ class SingleFileAMSR2Dataset(Dataset):
                 swath_array = data['swath_array']
 
                 for idx in range(len(swath_array)):
-                    # Quick validation without loading full data
-                    swath_dict = swath_array[idx]
-                    swath = swath_dict.item() if isinstance(swath_dict, np.ndarray) else swath_dict
+                    try:
+                        swath_dict = swath_array[idx]
+                        swath = swath_dict.item() if isinstance(swath_dict, np.ndarray) else swath_dict
 
-                    if 'temperature' not in swath or 'metadata' not in swath:
-                        continue
-
-                    # Filter by orbit type
-                    if self.filter_orbit_type is not None:
-                        orbit_type = swath['metadata'].get('orbit_type', 'U')
-                        if orbit_type != self.filter_orbit_type:
+                        if 'temperature' not in swath or 'metadata' not in swath:
+                            rejected_count += 1
                             continue
 
-                    valid_indices.append(idx)
+                        # Filter by orbit type
+                        if self.filter_orbit_type is not None:
+                            orbit_type = swath['metadata'].get('orbit_type', 'U')
+                            if orbit_type != self.filter_orbit_type:
+                                rejected_count += 1
+                                continue
 
-                logger.info(f"✅ Found {len(valid_indices)} valid swaths")
+                        # Дополнительная проверка - загружаем температуру для валидации
+                        temperature = swath['temperature']
+                        metadata = swath['metadata']
 
-                # Limit number of swaths to prevent memory issues
+                        # Применяем scale factor
+                        scale_factor = metadata.get('scale_factor', 1.0)
+                        if temperature.dtype != np.float32:
+                            temperature = temperature.astype(np.float32) * scale_factor
+
+                        # Проверяем на negative strides
+                        if any(s < 0 for s in temperature.strides):
+                            logger.warning(f"Swath {idx}: negative strides detected, skipping")
+                            rejected_count += 1
+                            continue
+
+                        # Фильтруем невалидные значения
+                        temperature = np.where(temperature < 50, np.nan, temperature)
+                        temperature = np.where(temperature > 350, np.nan, temperature)
+
+                        # Проверяем валидность
+                        valid_pixels = np.sum(~np.isnan(temperature))
+                        total_pixels = temperature.size
+                        validity_ratio = valid_pixels / total_pixels
+
+                        if validity_ratio < 0.5:  # Более строгий порог - минимум 50% валидных пикселей
+                            logger.debug(f"Swath {idx}: rejected, only {validity_ratio:.1%} valid pixels")
+                            rejected_count += 1
+                            continue
+
+                        # Если прошли все проверки - добавляем
+                        valid_indices.append(idx)
+
+                    except Exception as e:
+                        logger.warning(f"Swath {idx}: error during validation: {e}")
+                        rejected_count += 1
+                        continue
+
+                logger.info(f"✅ Found {len(valid_indices)} valid swaths, rejected {rejected_count}")
+
+                # Ограничение количества swaths
                 if len(valid_indices) > self.max_swaths_in_memory:
                     logger.warning(f"⚠️ Limiting to {self.max_swaths_in_memory} swaths to save memory")
                     valid_indices = valid_indices[:self.max_swaths_in_memory]
@@ -151,13 +189,11 @@ class SingleFileAMSR2Dataset(Dataset):
     def __getitem__(self, idx):
         """Load and process a single swath on demand"""
         if idx >= len(self.valid_indices):
-            empty_tensor = torch.zeros(1, self.preprocessor.target_height, self.preprocessor.target_width)
-            return empty_tensor, empty_tensor
+            raise IndexError(f"Index {idx} out of range for {len(self.valid_indices)} valid swaths")
 
         swath_idx = self.valid_indices[idx]
 
         try:
-            # Load only the needed swath
             with np.load(self.npz_path, allow_pickle=True) as data:
                 swath_array = data['swath_array']
                 swath_dict = swath_array[swath_idx]
@@ -169,25 +205,18 @@ class SingleFileAMSR2Dataset(Dataset):
 
                 # Apply scale factor
                 scale_factor = metadata.get('scale_factor', 1.0)
-                if raw_temperature.dtype != np.float32:
-                    temperature = raw_temperature.astype(np.float32) * scale_factor
-                else:
-                    temperature = raw_temperature * scale_factor
+                temperature = raw_temperature.astype(np.float32) * scale_factor
 
-                # Clear raw data from memory immediately
+                # Fix negative strides if any
+                if any(s < 0 for s in temperature.strides):
+                    temperature = temperature.copy()
+
+                # Clear raw data
                 del raw_temperature
 
                 # Filter invalid values
                 temperature = np.where(temperature < 50, np.nan, temperature)
                 temperature = np.where(temperature > 350, np.nan, temperature)
-
-                # Check validity
-                valid_pixels = np.sum(~np.isnan(temperature))
-                total_pixels = temperature.size
-
-                if valid_pixels / total_pixels < 0.1:
-                    empty_tensor = torch.zeros(1, self.preprocessor.target_height, self.preprocessor.target_width)
-                    return empty_tensor, empty_tensor
 
                 # Process data
                 temperature = self.preprocessor.crop_and_pad_to_target(temperature)
@@ -196,21 +225,19 @@ class SingleFileAMSR2Dataset(Dataset):
                 if self.augment:
                     temperature = self._augment_data(temperature)
 
-                # Create degraded version for self-supervised learning
+                # Create degraded version
                 degraded = self._create_degradation(temperature)
 
                 high_res = torch.from_numpy(temperature).unsqueeze(0).float()
                 low_res = torch.from_numpy(degraded).unsqueeze(0).float()
 
-                # Clean up
                 del temperature, degraded
 
                 return low_res, high_res
 
         except Exception as e:
-            logger.error(f"❌ Error loading swath {idx}: {e}")
-            empty_tensor = torch.zeros(1, self.preprocessor.target_height, self.preprocessor.target_width)
-            return empty_tensor, empty_tensor
+            logger.error(f"❌ Unexpected error loading swath {swath_idx}: {e}")
+            raise  # Пусть падает - мы уже проверили все swaths при сканировании
 
     def _create_degradation(self, high_res: np.ndarray) -> np.ndarray:
         """Create degraded version for 8x super-resolution training"""
