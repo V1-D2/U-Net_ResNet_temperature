@@ -271,7 +271,7 @@ class SingleFileAMSR2Dataset(Dataset):
 class AMSR2NPZDataPreprocessor:
     """Preprocessor for AMSR2 data"""
 
-    def __init__(self, target_height: int = 2000, target_width: int = 200):  # Changed to 200
+    def __init__(self, target_height: int = 2000, target_width: int = 208):  # Changed to 200
         self.target_height = target_height
         self.target_width = target_width
         logger.info(f"📏 Preprocessor configured for size: {target_height}x{target_width}")
@@ -538,7 +538,7 @@ class MemorySafeSequentialTrainer:
         )
 
         # Mixed precision scaler
-        self.scaler = torch.cuda.amp.GradScaler() if self.use_amp else None
+        self.scaler = torch.amp.GradScaler('cuda') if self.use_amp else None
 
         self.criterion = AMSR2SpecificLoss()
         self.training_history = []
@@ -569,7 +569,7 @@ class MemorySafeSequentialTrainer:
                 degradation_scale=8,  # 8x super-resolution
                 augment=augment,
                 filter_orbit_type=filter_orbit_type,
-                max_swaths_in_memory=100  # Limit swaths
+                max_swaths_in_memory=1000  # Limit swaths
             )
 
             if len(dataset) == 0:
@@ -581,7 +581,7 @@ class MemorySafeSequentialTrainer:
                 dataset,
                 batch_size=batch_size,
                 shuffle=True,
-                num_workers=2 if self.device.type == 'cuda' else 0,
+                num_workers=0,
                 pin_memory=True if self.device.type == 'cuda' else False,
                 persistent_workers=False,  # Don't keep workers alive
                 drop_last=True
@@ -598,7 +598,7 @@ class MemorySafeSequentialTrainer:
                     high_res = high_res.to(self.device, non_blocking=True)
 
                     # Mixed precision training
-                    with torch.cuda.amp.autocast(enabled=self.use_amp):
+                    with torch.amp.autocast('cuda', enabled=self.use_amp):
                         pred = self.model(low_res)
                         loss, loss_components = self.criterion(pred, high_res)
                         loss = loss / self.gradient_accumulation_steps
