@@ -412,13 +412,36 @@ class UNetDecoder(nn.Module):
 
         x = self.up4(x)
         print(f"After up4: {x.shape}, skip_features[3]: {skip_features[3].shape}")
+        if x.shape[2] != skip_features[3].shape[2] or x.shape[3] != skip_features[3].shape[3]:
+            diff_h = skip_features[3].shape[2] - x.shape[2]
+            diff_w = skip_features[3].shape[3] - x.shape[3]
+            x = F.pad(x, [diff_w // 2, diff_w - diff_w // 2, diff_h // 2, diff_h - diff_h // 2])
         x = torch.cat([x, skip_features[3]], dim=1)
+
         x = self.up3(x)
+        print(f"After up3: {x.shape}, skip_features[2]: {skip_features[2].shape}")
+        if x.shape[2] != skip_features[2].shape[2] or x.shape[3] != skip_features[2].shape[3]:
+            diff_h = skip_features[2].shape[2] - x.shape[2]
+            diff_w = skip_features[2].shape[3] - x.shape[3]
+            x = F.pad(x, [diff_w // 2, diff_w - diff_w // 2, diff_h // 2, diff_h - diff_h // 2])
         x = torch.cat([x, skip_features[2]], dim=1)
+
         x = self.up2(x)
+        print(f"After up2: {x.shape}, skip_features[1]: {skip_features[1].shape}")
+        if x.shape[2] != skip_features[1].shape[2] or x.shape[3] != skip_features[1].shape[3]:
+            diff_h = skip_features[1].shape[2] - x.shape[2]
+            diff_w = skip_features[1].shape[3] - x.shape[3]
+            x = F.pad(x, [diff_w // 2, diff_w - diff_w // 2, diff_h // 2, diff_h - diff_h // 2])
         x = torch.cat([x, skip_features[1]], dim=1)
+
         x = self.up1(x)
+        print(f"After up1: {x.shape}, skip_features[0]: {skip_features[0].shape}")
+        if x.shape[2] != skip_features[0].shape[2] or x.shape[3] != skip_features[0].shape[3]:
+            diff_h = skip_features[0].shape[2] - x.shape[2]
+            diff_w = skip_features[0].shape[3] - x.shape[3]
+            x = F.pad(x, [diff_w // 2, diff_w - diff_w // 2, diff_h // 2, diff_h - diff_h // 2])
         x = torch.cat([x, skip_features[0]], dim=1)
+
         x = self.final_up(x)
         x = self.final_conv(x)
         return x
