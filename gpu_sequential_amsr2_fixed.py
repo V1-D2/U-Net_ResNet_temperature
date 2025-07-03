@@ -644,7 +644,7 @@ class MemorySafeSequentialTrainer:
                 dataset,
                 batch_size=batch_size,
                 shuffle=True,
-                num_workers=4,
+                num_workers=0,
                 pin_memory=True if self.device.type == 'cuda' else False,
                 persistent_workers=False,  # Don't keep workers alive
                 drop_last=True
