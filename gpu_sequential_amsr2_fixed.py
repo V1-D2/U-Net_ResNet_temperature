@@ -349,7 +349,7 @@ class ResNetBlock(nn.Module):
 class UNetResNetEncoder(nn.Module):
     def __init__(self, in_channels: int = 1):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels, 64, 7, 2, 3, bias=False)
+        self.conv1 = nn.Conv2d(in_channels, 64, 7, 2, 3, bias=False, padding_mode='replicate')
         self.bn1 = nn.BatchNorm2d(64)
         self.maxpool = nn.MaxPool2d(3, 2, 1)
 
@@ -406,7 +406,12 @@ class UNetDecoder(nn.Module):
         )
 
     def forward(self, x, skip_features):
+        print(f"Decoder input shape: {x.shape}")
+        for i, feat in enumerate(skip_features):
+            print(f"Skip feature {i} shape: {feat.shape}")
+
         x = self.up4(x)
+        print(f"After up4: {x.shape}, skip_features[3]: {skip_features[3].shape}")
         x = torch.cat([x, skip_features[3]], dim=1)
         x = self.up3(x)
         x = torch.cat([x, skip_features[2]], dim=1)
