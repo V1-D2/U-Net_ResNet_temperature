@@ -470,9 +470,11 @@ class UNetDecoder(nn.Module):
 
 
 class UNetResNetSuperResolution(nn.Module):
-    def __init__(self, in_channels: int = 1, out_channels: int = 1, scale_factor: int = 8):  # Changed to 8
+    def __init__(self, in_channels: int = 1, out_channels: int = 1, scale_factor: int = 8, target_height: int = 2048, target_width: int = 200):  # Changed to 8
         super().__init__()
         self.scale_factor = scale_factor
+        self.target_height = target_height
+        self.target_width = target_width
         self.encoder = UNetResNetEncoder(in_channels)
         self.decoder = UNetDecoder(out_channels)
 
@@ -507,6 +509,13 @@ class UNetResNetSuperResolution(nn.Module):
         encoded, skip_features = self.encoder(x)
         decoded = self.decoder(encoded, skip_features)
         output = self.upsampling(decoded)
+
+        if hasattr(self, 'target_height') and hasattr(self, 'target_width'):
+            if output.shape[2] > self.target_height:
+                output = output[:, :, :self.target_height, :]
+            if output.shape[3] > self.target_width:
+                output = output[:, :, :, :self.target_width]
+
         return output
 
 
